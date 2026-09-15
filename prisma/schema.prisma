@@ -1,0 +1,127 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  PASSENGER
+  DRIVER
+  ADMIN
+}
+
+enum DriverApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum RideStatus {
+  REQUESTED
+  SEARCHING
+  DRIVER_ASSIGNED
+  DRIVER_ARRIVING
+  DRIVER_ARRIVED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  PAYMENT_PENDING
+  PAYMENT_PROCESSING
+  PAYMENT_SUCCESS
+  PAYMENT_FAILED
+}
+
+model User {
+  id               String   @id @default(uuid())
+  phone            String   @unique
+  email            String?  @unique
+  passwordHash     String
+  role             Role
+  status           String   @default("ACTIVE")
+  createdAt        DateTime @default(now())
+  driver           Driver?
+  ridesAsPassenger Ride[]   @relation("PassengerRides")
+}
+
+model Driver {
+  id             String               @id @default(uuid())
+  userId         String               @unique
+  user           User                 @relation(fields: [userId], references: [id])
+  approvalStatus DriverApprovalStatus @default(PENDING)
+  isOnline       Boolean              @default(false)
+  isAvailable    Boolean              @default(false)
+  vehicle        Vehicle?
+  location       DriverLocation?
+  ridesAsDriver  Ride[]               @relation("DriverRides")
+}
+
+model Vehicle {
+  id           String  @id @default(uuid())
+  driverId     String  @unique
+  driver       Driver  @relation(fields: [driverId], references: [id])
+  make         String
+  model        String
+  year         Int
+  colour       String
+  registration String  @unique
+  verified     Boolean @default(false)
+}
+
+model DriverLocation {
+  driverId  String   @id
+  driver    Driver   @relation(fields: [driverId], references: [id])
+  latitude  Float
+  longitude Float
+  accuracy  Float?
+  updatedAt DateTime @updatedAt
+}
+
+model Ride {
+  id            String     @id @default(uuid())
+  passengerId   String
+  passenger     User       @relation("PassengerRides", fields: [passengerId], references: [id])
+  driverId      String?
+  driver        Driver?    @relation("DriverRides", fields: [driverId], references: [id])
+  pickupLat     Float
+  pickupLng     Float
+  destLat       Float
+  destLng       Float
+  status        RideStatus @default(REQUESTED)
+  estimatedFare Float?
+  finalFare     Float?
+  createdAt     DateTime   @default(now())
+  payment       Payment?
+  ratings       Rating[]
+}
+
+model Payment {
+  id             String   @id @default(uuid())
+  rideId         String   @unique
+  ride           Ride     @relation(fields: [rideId], references: [id])
+  amount         Float
+  method         String
+  providerRef    String?
+  status         String
+  idempotencyKey String   @unique
+  createdAt      DateTime @default(now())
+}
+
+model Rating {
+  id        String   @id @default(uuid())
+  rideId    String
+  ride      Ride     @relation(fields: [rideId], references: [id])
+  ratedBy   String
+  ratedUser String
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now())
+}
+
+model PricingConfig {
+  key         String  @id
+  value       String
+  description String?
+}
