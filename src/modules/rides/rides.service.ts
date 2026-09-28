@@ -2,6 +2,40 @@ import prisma from "../../config/prisma";
 import { estimateTrip } from "./distance.service";
 import { calculateFare, getPricingConfig } from "../pricing/pricing.service";
 import { canTransition } from "./ride.stateMachine";
+import { findNearbyDrivers, assignDriverToRide } from "../matching/matching.service";
+
+export async function searchForDriver(rideId: string) {
+  const ride = await prisma.ride.findUnique({ where: { id: rideId } });
+  if (!ride) throw new Error("RIDE_NOT_FOUND");
+  if (ride.status !== "REQUESTED") throw new Error(`CANNOT_SEARCH_FROM_${ride.status}`);
+
+  // Move to SEARCHING first
+  await transitionRideStatus(rideId, "SEARCHING");
+
+  let radius = 5;
+  const maxRadius = 15;
+  const step = 2;
+
+  while (radius <= maxRadius) {
+    const candidates = await findNearbyDrivers(ride.pickupLat, ride.pickupLng, radius);
+
+    for (const candidate of candidates) {
+      try {
+        // First driver found within radius gets assigned — MVP1 simplification.
+        // Full spec: send request, wait 30s for accept/reject before trying next driver.
+        return await assignDriverToRide(rideId, candidate.id);
+      } catch (err: any) {
+        if (err.message === "RIDE_ALREADY_ASSIGNED") throw err; // no point continuing
+        // otherwise try next candidate
+        continue;
+      }
+    }
+
+    radius += step;
+  }
+
+  throw new Error("NO_DRIVER_FOUND");
+}
 
 export async function createRide(passengerId: string, data: {
   pickupLat: number; pickupLng: number; destLat: number; destLng: number;

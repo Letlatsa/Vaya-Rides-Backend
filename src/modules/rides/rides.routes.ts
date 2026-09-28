@@ -2,7 +2,7 @@ import { Router } from "express";
 import { authenticate, AuthRequest } from "../../common/middleware/authenticate";
 import { authorize } from "../../common/middleware/authorize";
 import { createRideSchema } from "./ride.schema";
-import { createRide, transitionRideStatus } from "./rides.service";
+import { createRide, transitionRideStatus, searchForDriver } from "./rides.service";
 import prisma from "../../config/prisma";
 
 const router = Router();
@@ -16,6 +16,16 @@ router.post("/", authenticate, authorize("PASSENGER"), async (req: AuthRequest, 
     res.status(201).json(ride);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/:id/search", authenticate, authorize("PASSENGER"), async (req: AuthRequest, res) => {
+  try {
+    const rideId = req.params.id as string;
+    const ride = await searchForDriver(rideId);
+    res.json(ride);
+  } catch (err: any) {
+    res.status(409).json({ error: err.message });
   }
 });
 
